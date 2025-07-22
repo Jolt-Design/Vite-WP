@@ -216,7 +216,7 @@ class Scripts
 
     if (!empty($index->imports)) {
       foreach ($index->imports as $import) {
-        $this->enqueueDependencies($import);
+        $this->enqueueDependencies($import, $preload);
       }
     }
 
