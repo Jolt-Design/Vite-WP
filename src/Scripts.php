@@ -24,7 +24,11 @@ class Scripts
   protected string $devServerUrl;
   protected bool $devMode = false;
   protected bool $react = false;
+  protected bool $preloadEnabled = true;
   protected $markerData;
+  protected $manifest;
+  protected $enqueued = [];
+  protected $preloadChunks = [];
 
   /**
    * Create a script enqueuer for the given files
@@ -38,7 +42,7 @@ class Scripts
     $this->codeDir = $codeDir;
     $this->distUrl = $distUrl;
     $this->entryPoint = $entryPoint;
-    $this->key = 'jolt_vite_' . substr(sha1($codeDir), 0, 8);
+    $this->key = 'jolt_vite_' . $this->hash($codeDir);
 
     $marker = $this->getMarkerData();
 
@@ -72,6 +76,18 @@ class Scripts
   }
 
   /**
+   * Enable or disable module preloading
+   *
+   * Module preloading will insert
+   *
+   * @param bool $enabled
+   */
+  public function setPreload(bool $enabled)
+  {
+    $this->preloadEnabled = $enabled;
+  }
+
+  /**
    * Override the base URL for the dev server
    *
    * Useful if your scripts are only enqueued in a sub-directory.
@@ -95,16 +111,9 @@ class Scripts
       wp_enqueue_script_module("{$this->key}_entrypoint", $this->getDevUrl($this->entryPoint), [], null, ['in_footer' => true]);
       add_action('wp_head', [$this, 'outputReactDevHmrScripts']);
     } else {
-      $manifest = json_decode(file_get_contents($this->getPath('/dist/.vite/manifest.json')));
-      $index = $manifest->{$this->entryPoint};
-
-      wp_enqueue_script_module("{$this->key}_js", $this->getUrl($index->file), [], null, ['in_footer' => true]);
-
-      if (!empty($index->css)) {
-        foreach ($index->css as $key => $css) {
-          wp_enqueue_style("{$this->key}_css_{$key}", $this->getUrl($css));
-        }
-      }
+      $this->manifest = json_decode(file_get_contents($this->getPath('/dist/.vite/manifest.json')));
+      $this->enqueueDependencies($this->entryPoint);
+      add_action('wp_head', [$this, 'outputPreloadChunks']);
     }
   }
 
@@ -125,6 +134,18 @@ class Scripts
             window.__vite_plugin_react_preamble_installed__ = true
           </script>
         EOF;
+    }
+  }
+
+  /**
+   * Outputs the module preload HTML
+   *
+   * @internal needs to be public for WordPress to access it as a callback
+   */
+  public function outputPreloadChunks()
+  {
+    if ($this->preloadEnabled) {
+      echo implode(PHP_EOL, $this->preloadChunks);
     }
   }
 
@@ -159,5 +180,60 @@ class Scripts
   protected function getDevUrl(string $path)
   {
     return $this->devServerUrl . $this->baseUrl . $path;
+  }
+
+  protected function enqueueDependencies($key, $preload = false)
+  {
+    if (isset($this->enqueued[$key])) {
+      return;
+    }
+
+    if (!$preload && isset($this->preloadChunks[$key])) {
+      // We were preloading this but now we need to fully load it
+      // so remove it from the preload list and continue
+      unset($this->preloadChunks[$key]);
+    }
+
+    if ($preload && !$this->preloadEnabled) {
+      return;
+    }
+
+    $this->enqueued[$key] = true;
+    $index = $this->manifest->{$key};
+    $hash = $this->hash($key);
+
+    if ($preload) {
+      $this->preloadChunks[$key] = $this->getPreloadLinkMarkup($this->getUrl($index->file));
+    } else {
+      wp_enqueue_script_module("{$this->key}_{$hash}_js", $this->getUrl($index->file), [], null, ['in_footer' => true]);
+    }
+
+    if (!empty($index->css)) {
+      foreach ($index->css as $cssKey => $css) {
+        wp_enqueue_style("{$this->key}_{$hash}_css_{$cssKey}", $this->getUrl($css));
+      }
+    }
+
+    if (!empty($index->imports)) {
+      foreach ($index->imports as $import) {
+        $this->enqueueDependencies($import);
+      }
+    }
+
+    if (!empty($index->dynamicImports)) {
+      foreach ($index->dynamicImports as $import) {
+        $this->enqueueDependencies($import, preload: true);
+      }
+    }
+  }
+
+  protected function hash($string): string
+  {
+    return substr(sha1($string), 0, 8);
+  }
+
+  protected function getPreloadLinkMarkup(string $url): string
+  {
+    return "<link rel=\"modulepreload\" href=\"{$url}\" />";
   }
 }
