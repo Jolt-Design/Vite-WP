@@ -1,0 +1,19 @@
+{
+	"name": "jolt-design/vite-wp",
+	"description": "Enqueue Vite scripts in WordPress",
+	"type": "library",
+	"license": "None",
+	"version": "0.0.1",
+	"autoload": {
+		"psr-4": {
+			"Jolt\\ViteWP\\": "src/"
+		}
+	},
+	"authors": [
+		{
+			"name": "Jolt Design",
+			"email": "studio@joltdesign.co.uk"
+		}
+	],
+	"require": {}
+}
