@@ -188,12 +188,6 @@ class Scripts
       return;
     }
 
-    if (!$preload && isset($this->preloadChunks[$key])) {
-      // We were preloading this but now we need to fully load it
-      // so remove it from the preload list and continue
-      unset($this->preloadChunks[$key]);
-    }
-
     if ($preload && !$this->preloadEnabled) {
       return;
     }
@@ -202,9 +196,11 @@ class Scripts
     $index = $this->manifest->{$key};
     $hash = $this->hash($key);
 
-    if ($preload) {
+    if (!isset($this->preloadChunks[$key])) {
       $this->preloadChunks[$key] = $this->getPreloadLinkMarkup($this->getUrl($index->file));
-    } else {
+    }
+
+    if (!$preload) {
       wp_enqueue_script_module("{$this->key}_{$hash}_js", $this->getUrl($index->file), [], null, ['in_footer' => true]);
     }
 
