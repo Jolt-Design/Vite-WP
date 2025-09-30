@@ -182,7 +182,7 @@ class Scripts
 
   protected function shouldEnqueueDevScripts(): bool
   {
-    return $this->devMode && !$this->isMarkerStale($this->getMarkerData());
+    return $this->devMode && $this->getMarkerData() && !$this->isMarkerStale($this->getMarkerData());
   }
 
   protected function getPath(string $file)
