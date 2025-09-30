@@ -16,6 +16,8 @@ namespace Jolt\ViteWP;
 
 class Scripts
 {
+  const MARKER_STALE_SECONDS = 120;
+
   protected string $key;
   protected string $entryPoint;
   protected string $codeDir;
@@ -46,7 +48,7 @@ class Scripts
 
     $marker = $this->getMarkerData();
 
-    if ($marker) {
+    if ($marker && !$this->isMarkerStale($marker)) {
       $this->devServerUrl = "http://localhost:{$marker->serverPort}";
     }
   }
@@ -162,9 +164,25 @@ class Scripts
     return $this->markerData;
   }
 
+  protected function isMarkerStale($marker): bool
+  {
+    if (!$marker || !isset($marker->lastUpdated)) {
+      return false;
+    }
+
+    $markerTime = $marker->lastUpdated ? strtotime($marker->lastUpdated) : 0;
+    $timeBeforeStaleMarker = time() - static::MARKER_STALE_SECONDS;
+
+    if ($markerTime < $timeBeforeStaleMarker) {
+      return true;
+    }
+
+    return false;
+  }
+
   protected function shouldEnqueueDevScripts(): bool
   {
-    return $this->devMode && $this->getMarkerData();
+    return $this->devMode && !$this->isMarkerStale($this->getMarkerData());
   }
 
   protected function getPath(string $file)
